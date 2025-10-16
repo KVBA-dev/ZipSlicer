@@ -5,7 +5,7 @@ Great for sending large files over Discord or other messengers that limit file s
 <br/><br/><br/>
 
 ## Download
-⬇️ [Download ZipSlicer.exe](./bin/ZipSlicer.exe)
+⬇️ [Download ZipSlicer.exe](https://raw.githubusercontent.com/Buki1350/ZipSlicer/main/bin/ZipSlicer.exe)
 <br/><br/><br/>
 
 ## Usage

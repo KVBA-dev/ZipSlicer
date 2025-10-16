@@ -21,7 +21,7 @@ SizeParserError :: enum {
 
 parse_file_size :: proc(filesize: string) -> (size: i64, err: SizeParserError) {
 	size = 0
-	state: SizeParserState = .Number
+	state: SizeParserState = .Start
 	for c in filesize {
 		switch state {
 		case .Start:

@@ -103,7 +103,7 @@ main :: proc() {
 	zipexists := os.is_file(zipfile)
 	direxists := os.is_dir(dirpath)
 
-	if zipexists {
+	if zipexists && zipfile == firstArg {
 		if len(os.args) < 4 {
 			show_invalid_arguments()
 			os.exit(1)
@@ -160,7 +160,7 @@ has_zip_parts :: proc(dirpath: string, allocator := context.allocator) -> bool {
 		return false
 	}
 	files, readerr := os.read_dir(dir, 0, allocator)
-	defer delete(files, allocator)
+	defer os.file_info_slice_delete(files, allocator)
 	if readerr != nil {
 		return false
 	}
@@ -211,7 +211,7 @@ rebuild :: proc(dirpath, zipfile: string, allocator := context.allocator) {
 			return
 		}
 	}
-	defer delete(files, allocator)
+	defer os.file_info_slice_delete(files, allocator)
 	for fi in files {
 		when ODIN_DEBUG {
 			fmt.println("examining", fi.fullpath)

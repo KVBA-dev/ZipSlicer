@@ -4,6 +4,10 @@ A simple tool that lets you split large ZIP or RAR archives into smaller parts �
 Great for sending large files over Discord or other messengers that limit file size.
 <br/><br/><br/>
 
+## Download
+⬇️ [Download ZipSlicer.exe](https://github.com/<user>/<repo>/releases/latest/download/ZipSlicer.exe)
+<br/><br/><br/>
+
 ## Usage
 
 ### - Slicing
@@ -26,7 +30,3 @@ ZipSlicer.exe [directory with parts] [destination archive path]
 >[!IMPORTANT]
 or simply **double-click the .exe** in the same directory as the other parts.
 
-<br/><br/>
-## Download
-
-⬇️ [Download ZipSlicer.exe](https://github.com/<user>/<repo>/releases/latest/download/ZipSlicer.exe)

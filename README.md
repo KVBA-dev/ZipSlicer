@@ -1,32 +1,36 @@
 # ZipSlicer
 
-A simple tool that lets you split large ZIP or RAR archives into smaller parts — or merge them back into the original file.\
+A simple tool that lets you split large ZIP archives into smaller parts — or merge them back into the original file.\
 Great for sending large files over Discord or other messengers that limit file size.
+
 <br/><br/><br/>
 
-## Download
-⬇️ [Download ZipSlicer](https://github.com/Buki1350/ZipSlicer/releases/tag/1.0.0)
-<br/><br/><br/>
+## Building
+1. Install Odin compiler
+2. Run following command
+```
+odin build . -out:ZipSlicer
+```
 
 ## Usage
 
 ### - Slicing
 
 ```
-ZipSlicer.exe [zip/rar path] [destination directory path] [part size] [format flag: -b, -mb, -gb]
+ZipSlicer [zip path] [destination directory path] [part size]
 ```
 
 or
 
 ```
-ZipSlicer.exe [destination directory path] [zip/rar path] [part size] [format flag: -b, -mb, -gb]
+ZipSlicer [destination directory path] [zip path] [part size]
 ```
 
 ### - Merging
 
 ```
-ZipSlicer.exe [directory with parts] [destination archive path]
+ZipSlicer.exe -r [directory with parts] [destination archive path]
 ```
 >[!IMPORTANT]
-or simply **double-click the .exe** in the same directory as the other parts.
+or simply **double-click the program file** in the same directory as the other parts.
 

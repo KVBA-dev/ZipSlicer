@@ -3,8 +3,6 @@
 A simple tool that lets you split large ZIP archives into smaller parts — or merge them back into the original file.\
 Great for sending large files over Discord or other messengers that limit file size.
 
-<br/><br/><br/>
-
 ## Building
 1. Install Odin compiler
 2. Run following command
@@ -19,11 +17,15 @@ odin build . -out:ZipSlicer
 ```
 ZipSlicer [zip path] [destination directory path] [part size]
 ```
-
 or
 
 ```
 ZipSlicer [destination directory path] [zip path] [part size]
+```
+
+Example:
+```
+ZipSlicer largeArchive.zip destinationPath 5m
 ```
 
 ### - Merging

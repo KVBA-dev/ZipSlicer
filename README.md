@@ -3,6 +3,8 @@
 A simple tool that lets you split large ZIP archives into smaller parts — or merge them back into the original file.\
 Great for sending large files over Discord or other messengers that limit file size.
 
+Based on https://github.com/Buki1350/ZipSlicer
+
 ## Building
 1. Install Odin compiler
 2. Run following command

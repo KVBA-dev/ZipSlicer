@@ -1,17 +1,23 @@
 package main
 
+import "core:bufio"
 import "core:fmt"
+import "core:math"
+import "core:mem"
 import os "core:os/os2"
 import fp "core:path/filepath"
 import sl "core:slice"
-import "core:sort"
 import "core:strconv"
 import "core:strings"
+
+PART_EXTENSION :: ".fsp"
 
 SizeParserState :: enum {
 	Start,
 	Number,
 	Unit,
+	DecimalPoint,
+	DecimalNumber,
 }
 
 SizeParserError :: enum {
@@ -19,8 +25,22 @@ SizeParserError :: enum {
 	InvalidUnit,
 }
 
+Mode :: struct {
+	workingDirectory: string,
+	targetFile:       string,
+	partSize:         i64,
+	rebuild:          bool,
+}
+
+fractional_size :: proc(decimal: i64, factor: int, unit: i64) -> i64 {
+	frac_size: f64 = f64(decimal) / math.pow(10, f64(factor))
+	return i64(math.round(frac_size * f64(unit)))
+}
+
 parse_file_size :: proc(filesize: string) -> (size: i64, err: SizeParserError) {
 	size = 0
+	decimal: i64 = 0
+	factor := 0
 	state: SizeParserState = .Start
 	for c in filesize {
 		switch state {
@@ -35,105 +55,159 @@ parse_file_size :: proc(filesize: string) -> (size: i64, err: SizeParserError) {
 			if c >= '0' && c <= '9' {
 				size = size * 10 + i64(c - '0')
 			} else if c == 'k' || c == 'K' {
-				size *= 1024
+				size *= mem.Kilobyte
 				state = .Unit
 			} else if c == 'm' || c == 'M' {
-				size *= 1024 * 1024
+				size *= mem.Megabyte
 				state = .Unit
 			} else if c == 'g' || c == 'G' {
-				size *= 1024 * 1024 * 1024
+				size *= mem.Gigabyte
 				state = .Unit
 			} else if c == 't' || c == 'T' {
-				size *= 1024 * 1024 * 1024 * 1024
+				size *= mem.Terabyte
 				state = .Unit
+			} else if c == '.' {
+				state = .DecimalPoint
 			} else {
 				return 0, .InvalidString
 			}
 		case .Unit:
 			return 0, .InvalidUnit
+		case .DecimalPoint:
+			if c >= '0' && c <= '9' {
+				state = .DecimalNumber
+				decimal = i64(c - '0')
+				factor = 1
+			} else {
+				return 0, .InvalidString
+			}
+		case .DecimalNumber:
+			if c >= '0' && c <= '9' {
+				decimal = decimal * 10 + i64(c - '0')
+				factor += 1
+			} else if c == 'k' || c == 'K' {
+				size *= mem.Kilobyte
+				size += fractional_size(decimal, factor, mem.Kilobyte)
+				state = .Unit
+			} else if c == 'm' || c == 'M' {
+				size *= mem.Megabyte
+				size += fractional_size(decimal, factor, mem.Megabyte)
+				state = .Unit
+			} else if c == 'g' || c == 'G' {
+				size *= mem.Gigabyte
+				size += fractional_size(decimal, factor, mem.Gigabyte)
+				state = .Unit
+			} else if c == 't' || c == 'T' {
+				size *= mem.Terabyte
+				size += fractional_size(decimal, factor, mem.Terabyte)
+				state = .Unit
+			} else {
+				return 0, .InvalidString
+			}
 		}
 	}
-	return size, nil
+	if state == .Unit || state == .Number {
+		return size, nil
+	}
+	return 0, .InvalidString
 
 }
 
-main :: proc() {
-	if len(os.args) == 1 {
-		currdir := fp.dir(os.args[0], context.temp_allocator)
-		if has_zip_parts(currdir) {
-			outpath := fp.join([]string{currdir, "rebuilt_archive.zip"})
-			rebuild(currdir, outpath)
-			fmt.println("Auto rebuild archive:", outpath)
-			delete_zip_parts(currdir)
-			os.exit(0)
+parse_args :: proc(args: []string) -> (mode: Mode, ok: bool) {
+	argc := len(args)
+	pwd := fp.dir(args[0], context.temp_allocator)
+
+	// FileSlicer <- rebuild in current directory
+	if argc == 1 {
+		reader: bufio.Reader
+		bufio.reader_init(&reader, os.to_reader(os.stdin))
+		defer bufio.reader_destroy(&reader)
+		fmt.print("Enter the name for the output file: ")
+		line, err := bufio.reader_read_string(&reader, '\n')
+		if err != nil {
+			fmt.println("Error on reading input:", err)
+			return {}, false
 		}
-
-		show_invalid_arguments()
-		os.exit(1)
-	}
-
-	if len(os.args) < 3 {
-		show_invalid_arguments()
-		os.exit(1)
-	}
-
-	ensure(len(os.args) == 4, "too many arguments")
-
-	firstArg := os.args[1]
-	secondArg := os.args[2]
-	zipfile: string
-	dirpath: string
-
-	if firstArg != "-r" {
-		if fp.ext(firstArg) == ".zip" {
-			zipfile = firstArg
-			dirpath = secondArg
-		} else if fp.ext(secondArg) == ".zip" {
-			zipfile = secondArg
-			dirpath = firstArg
-		} else {
-			fmt.println("One of the arguments has to be .zip")
-			os.exit(1)
+		trimmed := strings.trim(line, "\t\r\n ")
+		if len(trimmed) == 0 {
+			fmt.println("File name cannot be empty")
+			return {}, false
 		}
-	} else {
-		dirpath = os.args[2]
-		zipfile = os.args[3]
+		mode.rebuild = true
+		mode.targetFile = fp.join([]string{pwd, trimmed}, context.allocator)
+		mode.workingDirectory = strings.clone(pwd, context.allocator)
+		return mode, true
 	}
 
-	zipexists := os.is_file(zipfile)
-	direxists := os.is_dir(dirpath)
+	if argc == 4 {
+		if args[1] == "-r" {
+			// FileSlicer -r target/dir name.ext <- rebuild into file
+			mode.rebuild = true
+			mode.workingDirectory = fp.dir(args[2], context.allocator)
+			mode.targetFile, _ = fp.join(
+				[]string{mode.workingDirectory, args[3]},
+				context.allocator,
+			)
+			return mode, true
+		}
+		// FileSlicer file.ext target/dir 50m <- slice file
 
-	if zipexists && zipfile == firstArg {
-		if len(os.args) < 4 {
+		mode.rebuild = false
+		mode.targetFile, _ = fp.join([]string{pwd, args[1]}, context.allocator)
+		mode.workingDirectory = fp.dir(args[2], context.allocator)
+		sizerr: SizeParserError
+		mode.partSize, sizerr = parse_file_size(args[3])
+		if sizerr != nil {
+			fmt.println("Error on parsing the part size:", sizerr)
+			return mode, false
+		}
+		return mode, true
+	}
+
+	return {}, false
+}
+
+main :: proc() {os.exit(run())}
+
+run :: proc() -> int {
+	mode, mode_ok := parse_args(os.args)
+	defer {
+		delete(mode.workingDirectory)
+		delete(mode.targetFile)
+	}
+	if !mode_ok {
+		show_invalid_arguments()
+		return 1
+	}
+
+	if mode.rebuild {
+		if !has_parts(mode.workingDirectory) {
 			show_invalid_arguments()
-			os.exit(1)
+			return 1
 		}
-
-		partsize, parserr := parse_file_size(os.args[3])
-		if parserr != nil {
-			fmt.println("Invalid part size")
-			os.exit(1)
-		}
-
-		slice(zipfile, dirpath, partsize)
-
-		fmt.println("Sliced file:", zipfile, "into:", dirpath, "| part size:", partsize, "B")
-	} else if direxists && has_zip_parts(dirpath) {
-		rebuild(dirpath, zipfile)
-		fmt.println("Rebuilt archive to:", zipfile)
-	} else {
-		show_invalid_arguments()
-		os.exit(1)
+		rebuild(mode.workingDirectory, mode.targetFile)
+		fmt.println("File rebuilt:", mode.targetFile)
+		delete_parts(mode.workingDirectory)
+		return 0
 	}
-}
 
-PART_EXTENSION :: ".pzi"
+	slice(mode.targetFile, mode.workingDirectory, mode.partSize)
+	fmt.println(
+		"Sliced file:",
+		mode.targetFile,
+		"into:",
+		mode.workingDirectory,
+		"| part size:",
+		mode.partSize,
+		"B",
+	)
+	return 0
+}
 
 show_invalid_arguments :: proc() {
 	msg :: `
 === [ USAGE ] ===
 Slice:   FileSlicer [archive path] [destination directory] [size with unit]
-    or   FileSlicer [destination directory] [archive path] [size with unit]
 
 	Example size values:
 	 - 500 = 500 bytes
@@ -142,18 +216,19 @@ Slice:   FileSlicer [archive path] [destination directory] [size with unit]
 	 - 500g = 500 gigabytes
 	 - 500t = 500 terabytes
 	Unit is case-insensitive (50k and 50K are the same size)
+	You may also use fractional values with appropiate units (e.g. 2.5k, 3.3m)
 
 Example: FileSlicer my.zip parts 10m
 -----------------------
 Rebuild: FileSlicer -r [directory with parts] [destination archive path]
-         or just run FileSlicer.exe in a folder with .bin files to auto rebuild
+         or just run FileSlicer in a folder with part files (.fsp) to auto rebuild
 `
 
 
 	fmt.println(msg)
 }
 
-has_zip_parts :: proc(dirpath: string, allocator := context.allocator) -> bool {
+has_parts :: proc(dirpath: string, allocator := context.allocator) -> bool {
 	dir, err := os.open(dirpath)
 	defer os.close(dir)
 	if err != nil {
@@ -199,7 +274,6 @@ rebuild :: proc(dirpath, zipfile: string, allocator := context.allocator) {
 	defer delete(parts)
 
 	files: []os.File_Info
-
 	{
 		dir, err := os.open(dirpath)
 		defer os.close(dir)
@@ -264,7 +338,7 @@ rebuild :: proc(dirpath, zipfile: string, allocator := context.allocator) {
 
 }
 
-delete_zip_parts :: proc(dirpath: string, allocator := context.allocator) {
+delete_parts :: proc(dirpath: string, allocator := context.allocator) {
 	dir, err := os.open(dirpath)
 	defer os.close(dir)
 	if err != nil {
@@ -307,7 +381,6 @@ slice :: proc(zipfile, dirpath: string, partsize: i64, allocator := context.allo
 	buf := make([]u8, partsize, allocator)
 	defer delete(buf, allocator)
 
-
 	for {
 		bytesread, readerr := os.read_at(fd, buf, offset)
 		if readerr != nil && readerr != .EOF {
@@ -349,7 +422,6 @@ slice :: proc(zipfile, dirpath: string, partsize: i64, allocator := context.allo
 		if writeerr != nil {
 			fmt.println("Could not write to file", partname, "-", writeerr)
 		}
-
 
 		byteswritten, writeerr = os.write(partfile, part[:])
 		assert(byteswritten == len(part), "write error")

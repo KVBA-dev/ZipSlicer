@@ -110,7 +110,6 @@ parse_file_size :: proc(filesize: string) -> (size: i64, err: SizeParserError) {
 		return size, nil
 	}
 	return 0, .InvalidString
-
 }
 
 parse_args :: proc(args: []string) -> (mode: Mode, ok: bool) {
@@ -150,8 +149,8 @@ parse_args :: proc(args: []string) -> (mode: Mode, ok: bool) {
 			)
 			return mode, true
 		}
-		// FileSlicer file.ext target/dir 50m <- slice file
 
+		// FileSlicer file.ext target/dir 50m <- slice file
 		mode.rebuild = false
 		mode.targetFile, _ = fp.join([]string{pwd, args[1]}, context.allocator)
 		mode.workingDirectory = fp.dir(args[2], context.allocator)
@@ -163,7 +162,6 @@ parse_args :: proc(args: []string) -> (mode: Mode, ok: bool) {
 		}
 		return mode, true
 	}
-
 	return {}, false
 }
 
@@ -178,6 +176,10 @@ run :: proc() -> int {
 	if !mode_ok {
 		show_invalid_arguments()
 		return 1
+	}
+
+	when ODIN_DEBUG {
+		fmt.println(mode)
 	}
 
 	if mode.rebuild {
@@ -366,6 +368,9 @@ slice :: proc(zipfile, dirpath: string, partsize: i64, allocator := context.allo
 		fmt.println("Could not derive abs path to", zipfile)
 		return
 	}
+	fmt.println(zipfile)
+	fmt.println(dirpath)
+	fmt.println(abspath)
 
 	fd, fileerr := os.open(zipfile)
 	defer os.close(fd)
@@ -377,7 +382,6 @@ slice :: proc(zipfile, dirpath: string, partsize: i64, allocator := context.allo
 
 	offset: i64 = 0
 	partid: i32 = 0
-
 	buf := make([]u8, partsize, allocator)
 	defer delete(buf, allocator)
 
